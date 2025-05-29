@@ -7,7 +7,7 @@ This repository contains the artifact and code for the ASE 2025 submission:
 
 ## 🧠 Overview
 
-InvarGen introduces a **symbolic scenario testing framework** to assess Autonomous Driving Systems (ADS) using realistic, variant-rich accident-inspired scenarios. Instead of generating scenarios blindly or relying solely on expert heuristics, InvarGen integrates:
+InvarGen introduces a **fixed point guided scenario testing framework** to assess Autonomous Driving Systems (ADS) using realistic, variant-rich accident-inspired scenarios. Instead of generating scenarios blindly or relying solely on expert heuristics, InvarGen integrates:
 
 - **Large Language Models (LLMs)** for accident analysis and root cause summarization
 - **Symbolic fixed point reasoning** to guide scenario prototyping
