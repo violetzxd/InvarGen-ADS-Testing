@@ -1,7 +1,7 @@
 # InvarGen
 
 This repository contains the artifact and code for the ASE 2025 submission:  
-**"InvarGen: Fixed-Point Guided Scenario Generation via Multi-Modal LLM Reasoning and Software Testing Techniques"**.
+**"Fixed-Point Guided Scenario Generation via Multi-Modal LLM Reasoning and Software Testing"**.
 
 ---
 
