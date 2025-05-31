@@ -1,0 +1,7 @@
+The LLM-Driven Accident Analysis and Fixed Point Identification module is central to InvarGen. It processes multi-modal accident data to derive deep semantic understanding and formalize fixed points. While the exact prompts are not specified in the paper, their design is inferred from the module's functionalities (Section III.B and Appendix A).
+
+Objective: To instruct a multi-modal LLM to analyze raw accident data (video frames, images, textual reports) and extract:
+
+Semantic understanding: Entities, behaviors, intentions, causal chains.
+Formalized Fixed Points: Safety, Critical, and Recovery Fixed Points as logical predicates or DSL snippets.
+
