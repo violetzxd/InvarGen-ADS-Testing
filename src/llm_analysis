@@ -1,7 +1,238 @@
-The LLM-Driven Accident Analysis and Fixed Point Identification module is central to InvarGen. It processes multi-modal accident data to derive deep semantic understanding and formalize fixed points. While the exact prompts are not specified in the paper, their design is inferred from the module's functionalities (Section III.B and Appendix A).
+The LLM-Driven Accident Analysis and Fixed Point Identification module is central to InvarGen. It processes multi-modal accident data to derive deep semantic understanding and formalize fixed points. While the exact prompts are not specified in the paper, their design is inferred from the module's functionalities.
 
 Objective: To instruct a multi-modal LLM to analyze raw accident data (video frames, images, textual reports) and extract:
+1) Semantic understanding: Entities, behaviors, intentions, causal chains.
+2) Formalized Fixed Points: Safety, Critical, and Recovery Fixed Points as logical predicates or DSL snippets.
 
-Semantic understanding: Entities, behaviors, intentions, causal chains.
-Formalized Fixed Points: Safety, Critical, and Recovery Fixed Points as logical predicates or DSL snippets.
+Part 1: LLM Prompt Design for Accident Analysis and Fixed Point Extraction
+
+You are an expert Autonomous Driving System (ADS) safety analyst and a formal verification specialist. Your task is to meticulously analyze multi-modal accident data to understand the underlying causes and identify critical "scenario fixed points" that characterize the safety-critical states involved.
+
+**Input Data:**
+- **Primary:** A sequence of video frames and/or key images depicting an ADS-involved traffic accident.
+- **Secondary (if available):** Accompanying textual accident reports, sensor logs, or eyewitness accounts.
+
+**Analysis Steps - Perform these sequentially and thoroughly:**
+
+**Step 1: Multi-modal Scene Interpretation and Entity Recognition**
+- Analyze the visual data (video/images) to identify and precisely track all dynamic traffic participants (e.g., `Ego Vehicle`, `NPC_Car_1`, `Pedestrian_1`, `Motorcycle_1`, `Cyclist_1`), and static environmental elements (e.g., `Road_Type` (e.g., Highway, Urban, Intersection), `Lane_Markings`, `Traffic_Signals` (id, position), `Road_Hazards`, `Weather_Conditions` (e.g., clear, rain, fog), `Lighting_Conditions` (e.g., day, night, dusk/dawn, glare)).
+- For each identified entity, track its state variables over time: `position (x, y, z)`, `speed (m/s)`, `acceleration (m/s^2)`, `heading (degrees)`, `yaw_rate (deg/s)`, `lateral_offset_from_lane_center (m)`.
+
+**Step 2: Behavioral Analysis and Intent Inference**
+- For each dynamic participant, analyze their trajectories and state changes to infer their driving behaviors and underlying intentions.
+- **Examples:**
+    - `NPC_Car_1` performs `SuddenBraking` (infer `aggressive_braking_intent`).
+    - `NPC_Car_2` performs `AbruptLaneChange` (infer `aggressive_lane_change_intent`).
+    - `Ego Vehicle` exhibits `ExcessiveLateralDeviation` (infer `potential_loss_of_control`).
+- Quantify key interaction metrics: `Time-To-Collision (TTC)`, `Minimum Headway Distance (MHD)`.
+- Identify sensory conditions: `sensor_occlusion`, `sensor_noise`, `data_quality`.
+
+**Step 3: Accident Cause Chain Analysis**
+- Based on the observed events and inferred behaviors, reconstruct the causal chain that led to the accident or near-accident. Identify the initiating event(s) and the sequence of interactions.
+- **Example output format:**
+    ```
+    Causal_Chain:
+    - Event 1: NPC_Front (Car) at t=5s initiates sudden braking (deceleration=8m/s^2).
+    - Event 2: Ego Vehicle's perception/prediction module fails to adequately anticipate braking.
+    - Event 3: Ego Vehicle initiates emergency braking at t=5.8s, but too late.
+    - Event 4: Ego Vehicle approaches NPC_Front with extremely low TTC (0.5s) at t=6.5s.
+    - Outcome: Near-miss / Rear-end collision.
+    ```
+
+**Step 4: Fixed Point Conceptualization and Formalized Identification**
+- Based on the above analysis, identify and categorize the specific "scenario fixed points" that were involved, violated, or were relevant to the accident/critical situation.
+- **Formalize each identified fixed point** into a machine-readable format. Use the provided DSL syntax or logical predicates. Infer necessary parameters (e.g., `tolerance`, `threshold`, `min_distance`, `within_time`) based on typical driving physics, traffic regulations, or severity observed in the accident.
+
+**Fixed Point Types and Formalization Guidance:**
+
+**A. Safety Fixed Points (Invariants of Safe Driving Behavior):**
+- **Lane Keeping Fixed Point:**
+    - **Description:** ADS maintains a stable position near the lane center.
+    - **Formalization:** `INVARIANT_ALWAYS(is_lane_centered(Ego, tolerance=<inferred_tolerance>));`
+- **Safe Headway Fixed Point:**
+    - **Description:** ADS preserves a predefined safe distance from the vehicle ahead.
+    - **Formalization:** `INVARIANT_ALWAYS(distance(Ego, NPC_Front) > <inferred_min_safe_distance>);`
+- **Traffic Rule Compliance Fixed Point:**
+    - **Description:** ADS fully stops at a red light or stop sign.
+    - **Formalization:** `ON_EVENT(traffic_light_state_change("<signal_id>", "RED")) { ASSERT_EVENTUALLY(speed(Ego) == 0.0 AND at_position(Ego, <stop_line_pos>, tolerance=<pos_tolerance>), within_time=<time_limit>); }`
+
+**B. Critical Fixed Points (Unstable states revealing ADS vulnerabilities):**
+- **Near-Loss-of-Control Fixed Point:**
+    - **Description:** Vehicle attitude/trajectory indicates imminent loss of control (e.g., excessive sideslip, sharp turns).
+    - **Formalization:** `INVARIANT_ALWAYS(abs(get_sideslip_angle(Ego)) <= <inferred_max_sideslip_angle>);`
+- **Sensor Anomaly Fixed Point:**
+    - **Description:** Patterns of abnormal sensor readings (e.g., temporary occlusion, noise interference).
+    - **Formalization:** `INVARIANT_ALWAYS(get_sensor_data_quality("<sensor_id>") >= <inferred_min_quality_threshold>);`
+- **Near-Collision Interaction Fixed Point:**
+    - **Description:** Extremely close interactions between ADS and other vehicles without an actual collision (very low TTC/MHD).
+    - **Formalization:** `INVARIANT_ALWAYS(NOT (get_TTC(Ego, <NPC_ID>) <= <inferred_critical_TTC> AND NOT is_collision(Ego, <NPC_ID>)));`
+
+**C. Recovery Fixed Points (Desired safe states ADS should return to after perturbation):**
+- **Lane Recovery Fixed Point:**
+    - **Description:** ADS successfully returns to its lane after a departure.
+    - **Formalization:** `ON_EVENT(lane_deviation_start(Ego)) { ASSERT_EVENTUALLY(is_lane_centered(Ego, tolerance=<inferred_tolerance>), within_time=<time_limit>); }`
+- **Safe Distance Recovery Fixed Point:**
+    - **Description:** ADS re-establishes a safe headway after emergency braking or other sudden interactions.
+    - **Formalization:** `ON_EVENT(emergency_braking_start(Ego)) { ASSERT_EVENTUALLY(distance(Ego, NPC_Front) > <inferred_min_safe_distance>, within_time=<time_limit>); }`
+
+**Output Format:**
+
+Provide your analysis in a structured JSON format, including:
+```json
+{
+  "accident_summary": "Concise natural language summary of the accident.",
+  "causal_chain": [
+    {"event": "...", "timestamp": "...", "involved_entities": []},
+    // ... more events
+  ],
+  "identified_fixed_points": [
+    {
+      "type": "Safety" | "Critical" | "Recovery",
+      "subtype": "Lane Keeping Fixed Point" | "Safe Headway Fixed Point" | "...",
+      "description": "Natural language description of the fixed point's role in this accident.",
+      "formalization_predicate": "e.g., abs(ego_vehicle_sideslip_angle) > threshold_slippage",
+      "formalization_dsl_snippet": "```dsl\n// DSL code snippet based on the rules provided above\n// Include inferred parameters like tolerance, threshold, time_limit\n```"
+    },
+    // ... more fixed points
+  ],
+  "inferred_accident_patterns": {
+    "driving_style_npcs": ["aggressive", "defensive", "unpredictable"],
+    "environmental_factors": ["rain", "fog", "glare", "low_visibility"],
+    "sensor_issues": ["occlusion", "noise", "degradation"],
+    "critical_interactions": ["sudden_braking", "cut_in", "pedestrian_jaywalking"],
+    "severity_level": "low" | "medium" | "high" // based on TTC, MHD, deviation magnitude
+  }
+}
+
+
+Part 2: Fixed Point-Driven Test Scenario Prototype Generation
+
+This module translates the LLM's formalized fixed points and accident patterns into abstract, structured scenario blueprints.
+Core Idea: Select a relevant scenario template and populate it with details derived from the fixed points, defining participants, environment, and high-level events with ranges or symbolic variables.
+
+from typing import Dict, List, Any, Literal
+
+# Define data structures for Fixed Points and Accident Patterns
+class FormalizedFixedPoint:
+    def __init__(self, fp_type: Literal["Safety", "Critical", "Recovery"], subtype: str,
+                 description: str, formalization_predicate: str, formalization_dsl_snippet: str):
+        self.fp_type = fp_type
+        self.subtype = subtype
+        self.description = description
+        self.formalization_predicate = formalization_predicate
+        self.formalization_dsl_snippet = formalization_dsl_snippet
+
+class AccidentPattern:
+    def __init__(self, driving_style_npcs: List[str], environmental_factors: List[str],
+                 sensor_issues: List[str], critical_interactions: List[str], severity_level: str):
+        self.driving_style_npcs = driving_style_npcs
+        self.environmental_factors = environmental_factors
+        self.sensor_issues = sensor_issues
+        self.critical_interactions = critical_interactions
+        self.severity_level = severity_level
+
+class ScenarioPrototype:
+    def __init__(self, template_name: str, description: str,
+                 ego_vehicle_config: Dict[str, Any],
+                 npc_configs: List[Dict[str, Any]],
+                 environment_config: Dict[str, Any],
+                 event_sequences: List[Dict[str, Any]],
+                 encapsulated_fixed_points: List[FormalizedFixedPoint]):
+        self.template_name = template_name
+        self.description = description
+        self.ego_vehicle_config = ego_vehicle_config
+        self.npc_configs = npc_configs
+        self.environment_config = environment_config
+        self.event_sequences = event_sequences
+        self.encapsulated_fixed_points = encapsulated_fixed_points
+
+# Hypothetical LLM guidance interface (actual LLM call would be external)
+class LLMGuidance:
+    @staticmethod
+    def select_scenario_template(accident_pattern: AccidentPattern, fixed_points: List[FormalizedFixedPoint]) -> str:
+        """Suggests a scenario template based on accident patterns and fixed points."""
+        if "SuddenBraking" in accident_pattern.critical_interactions and \
+           any(fp.subtype == "Safe Headway Fixed Point" for fp in fixed_points):
+            return "Rear_End_Collision_Avoidance_Dense_Traffic"
+        elif any(fp.subtype == "Sensor Anomaly Fixed Point" for fp in fixed_points):
+            return "Lane_Keeping_Under_Sensor_Degradation"
+        return "Generic_Traffic_Scenario"
+
+    @staticmethod
+    def infer_initial_ranges(accident_pattern: AccidentPattern, fixed_points: List[FormalizedFixedPoint]) -> Dict[str, Any]:
+        """Infers initial parameter ranges (e.g., speed, distance) based on LLM analysis."""
+        ranges = {
+            "ego_speed": [15.0, 30.0],  # m/s
+            "npc_speed": [10.0, 25.0],
+            "longitudinal_offset": [20.0, 80.0] # m
+        }
+        if "aggressive_braking_intent" in accident_pattern.driving_style_npcs:
+            ranges["npc_braking_deceleration"] = [7.0, 10.0]
+        # Adjust ranges based on specific fixed points or environmental factors
+        return ranges
+
+def generate_scenario_prototype(llm_analysis_output: Dict[str, Any]) -> ScenarioPrototype:
+    """
+    Generates a scenario prototype guided by LLM's accident analysis and fixed points.
+    """
+    accident_pattern = AccidentPattern(
+        llm_analysis_output["inferred_accident_patterns"].get("driving_style_npcs", []),
+        llm_analysis_output["inferred_accident_patterns"].get("environmental_factors", []),
+        llm_analysis_output["inferred_accident_patterns"].get("sensor_issues", []),
+        llm_analysis_output["inferred_accident_patterns"].get("critical_interactions", []),
+        llm_analysis_output["inferred_accident_patterns"].get("severity_level", "medium")
+    )
+    fixed_points = [
+        FormalizedFixedPoint(
+            fp_data["type"], fp_data["subtype"], fp_data["description"],
+            fp_data["formalization_predicate"], fp_data["formalization_dsl_snippet"]
+        ) for fp_data in llm_analysis_output["identified_fixed_points"]
+    ]
+
+    # Step 1: Template Selection (LLM-Guided)
+    template_name = LLMGuidance.select_scenario_template(accident_pattern, fixed_points)
+
+    # Step 2: Fixed Point Encapsulation
+    # The selected fixed points are directly linked to the prototype
+    encapsulated_fixed_points = fixed_points
+
+    # Step 3: Participant, Environment, and High-Level Event Definition (LLM-Guided Inference)
+    inferred_ranges = LLMGuidance.infer_initial_ranges(accident_pattern, fixed_points)
+
+    ego_config = {"type": "Car", "initial_speed_range": inferred_ranges["ego_speed"]}
+    npc_configs = [
+        {"id": "NPC_Front", "type": "Car", "initial_speed_range": inferred_ranges["npc_speed"],
+         "longitudinal_offset_range": inferred_ranges["longitudinal_offset"],
+         "actions": [{"type": "SuddenBrake", "deceleration_range": inferred_ranges.get("npc_braking_deceleration", [5.0, 8.0])}]}
+    ]
+    env_config = {"road_type": "Highway", "lanes": 3, "weather": accident_pattern.environmental_factors}
+    event_sequences = llm_analysis_output["causal_chain"] # High-level events from LLM analysis
+
+    description = f"Prototype for {template_name} based on identified fixed points."
+
+    # Step 4: Compositional Generation (if multiple fixed points imply complex scenarios)
+    # This logic would be more complex, potentially merging smaller prototypes
+    # For now, we'll assume a single coherent prototype.
+
+    # Step 5: Definitional Mutation (for advanced prototype exploration - not directly in this function,
+    # but the prototype structure allows for it by modifying encapsulated_fixed_points definitions)
+
+    return ScenarioPrototype(
+        template_name=template_name,
+        description=description,
+        ego_vehicle_config=ego_config,
+        npc_configs=npc_configs,
+        environment_config=env_config,
+        event_sequences=event_sequences,
+        encapsulated_fixed_points=encapsulated_fixed_points
+    )
+
+# Example usage (Please use the output from the LLM prompt design)
+# llm_output = { ... (from the LLM prompt's JSON output) ... }
+# scenario_prototype = generate_scenario_prototype(llm_output)
+# print(scenario_prototype.description)
+
+
+
+
 
