@@ -1,0 +1,349 @@
+### Part 1: Fixed Point-Guided Intelligent Fuzz Testing
+
+import random
+
+class ScenarioInstance:
+    def __init__(self, prototype: ScenarioPrototype, parameters: Dict[str, Any]):
+        self.prototype = prototype
+        self.parameters = parameters # Concrete parameter values for this instance
+        self.simulation_results = None # To be populated after simulation
+
+    def copy(self):
+        return ScenarioInstance(self.prototype, self.parameters.copy())
+
+# Hypothetical LLM guidance for fuzzing
+class LLMFuzzingGuidance:
+    @staticmethod
+    def identify_sensitive_parameters(fixed_point: FormalizedFixedPoint, prototype: ScenarioPrototype) -> List[str]:
+        """
+        LLM identifies parameters in the prototype most sensitive to the given fixed point.
+        Example logic:
+        - Safe Headway FP: 'npc_braking_deceleration', 'longitudinal_offset', 'ego_speed'
+        - Sensor Anomaly FP: 'fog_density', 'sun_glare_intensity', 'sensor_noise_level', 'anomaly_duration'
+        """
+        sensitive_params = []
+        if fixed_point.subtype == "Safe Headway Fixed Point":
+            sensitive_params.extend(["npc_braking_deceleration", "longitudinal_offset", "ego_speed"])
+        elif fixed_point.subtype == "Sensor Anomaly Fixed Point":
+            sensitive_params.extend(["fog_density", "sun_glare_intensity", "sensor_noise_level", "anomaly_duration"])
+        return list(set(sensitive_params)) # Remove duplicates
+
+    @staticmethod
+    def get_perturbation_strategy(param: str, fixed_point: FormalizedFixedPoint) -> Dict[str, Any]:
+        """
+        LLM suggests specific perturbation ranges or distributions for a given parameter
+        to challenge the fixed point.
+        """
+        strategy = {"type": "range_random", "min_val": 0, "max_val": 1}
+        if param == "npc_braking_deceleration":
+            strategy = {"type": "range_random", "min_val": 8.0, "max_val": 12.0} # More aggressive
+        elif param == "longitudinal_offset":
+            strategy = {"type": "range_random", "min_val": 10.0, "max_val": 40.0} # Closer start
+        elif param == "fog_density":
+            strategy = {"type": "range_random", "min_val": 0.5, "max_val": 1.0} # Denser fog
+        return strategy
+
+def fuzz_scenario(prototype: ScenarioPrototype, fixed_point: FormalizedFixedPoint) -> ScenarioInstance:
+    """
+    Algorithm 4: FUZZSCENARIO
+    Generates a fuzzed scenario instance based on fixed-point guidance.
+    """
+    fuzzed_instance = ScenarioInstance(prototype, {}) # Start with empty concrete parameters
+    
+    # Initialize concrete parameters from prototype's ranges (e.g., mid-point of range)
+    fuzzed_instance.parameters["ego_speed"] = (prototype.ego_vehicle_config["initial_speed_range"][0] + prototype.ego_vehicle_config["initial_speed_range"][1]) / 2
+    if prototype.npc_configs:
+        fuzzed_instance.parameters["npc_speed"] = (prototype.npc_configs[0]["initial_speed_range"][0] + prototype.npc_configs[0]["initial_speed_range"][1]) / 2
+        fuzzed_instance.parameters["longitudinal_offset"] = (prototype.npc_configs[0]["longitudinal_offset_range"][0] + prototype.npc_configs[0]["longitudinal_offset_range"][1]) / 2
+        if prototype.npc_configs[0].get("actions") and prototype.npc_configs[0]["actions"][0].get("type") == "SuddenBrake":
+            fuzzed_instance.parameters["npc_braking_deceleration"] = (prototype.npc_configs[0]["actions"][0]["deceleration_range"][0] + prototype.npc_configs[0]["actions"][0]["deceleration_range"][1]) / 2
+            fuzzed_instance.parameters["braking_start_time"] = random.uniform(2.0, 5.0) # Example default
+
+    parameters_to_fuzz = LLMFuzzingGuidance.identify_sensitive_parameters(fixed_point, prototype)
+
+    for param in parameters_to_fuzz:
+        perturbation_strategy = LLMFuzzingGuidance.get_perturbation_strategy(param, fixed_point)
+        
+        if perturbation_strategy["type"] == "range_random":
+            # Apply perturbation: Update the specific parameter in the instance
+            fuzzed_instance.parameters[param] = random.uniform(
+                perturbation_strategy["min_val"], perturbation_strategy["max_val"]
+            )
+        # Add more perturbation types (e.g., Gaussian, discrete_choice) as needed
+
+    return fuzzed_instance
+
+# Fitness functions for fuzzing (conceptual)
+def calculate_fuzz_fitness(scenario_instance: ScenarioInstance, fixed_point: FormalizedFixedPoint) -> float:
+    """
+    Calculates fitness based on fixed point state after simulation.
+    This would involve interpreting simulation results.
+    """
+    simulation_metrics = scenario_instance.simulation_results # Assume simulation_results contain relevant metrics
+
+    if fixed_point.fp_type == "Safety": # Maximize deviation from safety
+        if fixed_point.subtype == "Safe Headway Fixed Point":
+            # Example: Integrate deviation magnitude over time
+            # Assuming simulation_metrics has 'headway_deviations' as a list of (time, deviation)
+            total_deviation = sum(dev * (time_end - time_start) for time_start, time_end, dev in simulation_metrics.get('headway_violations', []))
+            return total_deviation
+        elif fixed_point.subtype == "Lane Keeping Fixed Point":
+            # Example: Max lateral deviation
+            return simulation_metrics.get('max_lateral_deviation', 0.0)
+    elif fixed_point.fp_type == "Critical": # Maximize proximity to critical state
+        if fixed_point.subtype == "Near-Collision Interaction Fixed Point":
+            # Example: Proximity Score based on lowest TTC without collision
+            min_ttc = simulation_metrics.get('min_ttc', 100.0)
+            is_collision = simulation_metrics.get('is_collision', False)
+            return (1.0 / min_ttc) if not is_collision and min_ttc > 0.0 else 0.0 # Higher score for lower TTC
+    elif fixed_point.fp_type == "Recovery": # Minimize recovery time
+        if fixed_point.subtype == "Safe Distance Recovery Fixed Point":
+            # Example: Return recovery time. If no recovery, return a large value.
+            recovery_time = simulation_metrics.get('safe_distance_recovery_time', float('inf'))
+            return -recovery_time # Negative because NSGA-II minimizes objectives
+
+    return 0.0 # Default
+
+
+
+### Part 2: Structural Mutation Testing
+
+class LLMMutationGuidance:
+    @staticmethod
+    def suggest_structural_mutations(fixed_point: FormalizedFixedPoint, accident_pattern: AccidentPattern) -> List[str]:
+        """
+        LLM suggests relevant structural mutation operators based on fixed point and accident pattern.
+        """
+        mutations = []
+        if fixed_point.subtype == "Near-Collision Interaction Fixed Point" and \
+           "aggressive_braking_intent" in accident_pattern.driving_style_npcs:
+            mutations.append("ParticipantTypeMutation_Truck") # Change leading car to truck
+            mutations.append("EnvironmentalPerturbationMutation_Rain") # Introduce rain
+        elif fixed_point.subtype == "Sensor Anomaly Fixed Point":
+            mutations.append("EnvironmentalPerturbationMutation_DenseFog")
+            mutations.append("BehavioralPatternMutation_DistractedDriver") # NPC behavior causing more anomalies
+        return mutations
+
+def apply_structural_mutation(scenario_prototype: ScenarioPrototype, operator_type: str) -> ScenarioPrototype:
+    """
+    Applies a specific structural mutation to the scenario prototype.
+    """
+    mutated_prototype = ScenarioPrototype(
+        template_name=scenario_prototype.template_name,
+        description=f"Mutated: {scenario_prototype.description}",
+        ego_vehicle_config=scenario_prototype.ego_vehicle_config.copy(),
+        npc_configs=[cfg.copy() for cfg in scenario_prototype.npc_configs],
+        environment_config=scenario_prototype.environment_config.copy(),
+        event_sequences=[seq.copy() for seq in scenario_prototype.event_sequences],
+        encapsulated_fixed_points=[fp for fp in scenario_prototype.encapsulated_fixed_points]
+    )
+
+    if operator_type == "ParticipantTypeMutation_Truck":
+        for npc_config in mutated_prototype.npc_configs:
+            if npc_config.get("id") == "NPC_Front":
+                npc_config["type"] = "Truck"
+                # Adjust associated parameters if necessary (e.g., braking characteristics)
+    elif operator_type == "EnvironmentalPerturbationMutation_Rain":
+        mutated_prototype.environment_config["weather"] = ["Rain", "Moderate"]
+        # Add a specific event for weather change if needed
+    elif operator_type == "EnvironmentalPerturbationMutation_DenseFog":
+        mutated_prototype.environment_config["weather"] = ["Fog", "Dense"]
+        mutated_prototype.environment_config["fog_density"] = 0.8
+    elif operator_type == "BehavioralPatternMutation_DistractedDriver":
+        for npc_config in mutated_prototype.npc_configs:
+            if npc_config.get("id") == "NPC_Front":
+                # Add a new behavior attribute or modify existing ones
+                npc_config["behavior_pattern"] = "Distracted_Unpredictable"
+                # This would influence how fuzzing applies to their actions (e.g., random delays)
+    # ... more mutation operators as defined in the paper
+
+    return mutated_prototype
+
+def mutate_scenario_structure(prototype: ScenarioPrototype, fixed_point: FormalizedFixedPoint, accident_pattern: AccidentPattern) -> ScenarioPrototype:
+    """
+    Algorithm 5: MUTATESCENARIOSTRUCTURE
+    Applies structural mutations to a scenario prototype guided by LLM.
+    """
+    mutated_prototype = prototype.copy() # Start with a copy of the original prototype
+
+    suggested_mutations = LLMMutationGuidance.suggest_structural_mutations(fixed_point, accident_pattern)
+
+    for operator_type in suggested_mutations:
+        mutated_prototype = apply_structural_mutation(mutated_prototype, operator_type)
+
+    return mutated_prototype
+
+
+### Part 3: Multi-Objective Search Optimization
+
+import numpy as np
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.core.problem import Problem
+from pymoo.optimize import minimize
+# Note: pymoo is a powerful multi-objective optimization library.
+# The code below uses its conceptual structure. Actual implementation would
+# involve defining a custom Problem class and handling scenario simulation.
+
+class ScenarioOptimizationProblem(Problem):
+    def __init__(self, initial_population: List[ScenarioInstance], fixed_points: List[FormalizedFixedPoint]):
+        super().__init__(n_var=0, # Variables are implicit in scenario parameters
+                         n_obj=4, # FixedPoint Violation Degree, Recovery Time, Scenario Criticality, Scenario Diversity
+                         xl=0, xu=1, # Dummy bounds, as parameters are handled by fuzzing/mutation
+                         elementwise_eval=False) # Evaluate population as a whole
+        self.current_population = initial_population
+        self.fixed_points = fixed_points
+        self.llm_fuzzing_guidance = LLMFuzzingGuidance()
+        self.llm_mutation_guidance = LLMMutationGuidance()
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        """
+        Evaluates a population of scenarios and calculates their objective values.
+        In a real system, 'x' would represent indices or identifiers for scenarios
+        in self.current_population.
+        """
+        objectives_matrix = []
+        for scenario_instance in self.current_population:
+            # Simulate the scenario (expensive step, typically done by an external simulator)
+            # For demonstration, assume simulation results are already attached or obtained.
+            # scenario_instance.simulation_results = simulate_scenario_in_simulator(scenario_instance) # Placeholder
+
+            # Calculate objectives based on simulation results and fixed points
+            obj1 = self.calculate_fixed_point_violation_degree(scenario_instance) # Minimize
+            obj2 = self.calculate_fixed_point_recovery_time(scenario_instance) # Minimize
+            obj3 = -self.calculate_scenario_criticality(scenario_instance) # Maximize (so minimize negative)
+            obj4 = -self.calculate_scenario_diversity(scenario_instance) # Maximize (so minimize negative)
+            objectives_matrix.append([obj1, obj2, obj3, obj4])
+
+        out["F"] = np.array(objectives_matrix)
+
+    # Objective functions (conceptual, based on paper's definitions)
+    def calculate_fixed_point_violation_degree(self, scenario_instance: ScenarioInstance) -> float:
+        # Sum of deviation from safety fixed points
+        violation_degree = 0.0
+        for fp in self.fixed_points:
+            if fp.fp_type == "Safety":
+                # This would involve parsing simulation logs against fp.formalization_predicate
+                # Example: total lateral deviation from lane center, total time outside safe headway
+                if fp.subtype == "Safe Headway Fixed Point" and scenario_instance.simulation_results:
+                    violation_degree += scenario_instance.simulation_results.get('total_headway_violation_magnitude', 0.0)
+                # ... more specific calculations based on fixed point type
+        return violation_degree
+
+    def calculate_fixed_point_recovery_time(self, scenario_instance: ScenarioInstance) -> float:
+        # Maximum recovery time for any violated recovery fixed point
+        max_recovery_time = 0.0
+        for fp in self.fixed_points:
+            if fp.fp_type == "Recovery" and scenario_instance.simulation_results:
+                recovery_info = scenario_instance.simulation_results.get('recovery_status', {})
+                if fp.subtype in recovery_info and recovery_info[fp.subtype].get('recovered', False):
+                    max_recovery_time = max(max_recovery_time, recovery_info[fp.subtype].get('time_to_recover', 0.0))
+                elif fp.subtype in recovery_info and not recovery_info[fp.subtype].get('recovered', True):
+                    return float('inf') # If recovery failed, assign very high cost
+        return max_recovery_time
+
+    def calculate_scenario_criticality(self, scenario_instance: ScenarioInstance) -> float:
+        # Composite metric: MHD, TTC, unique violation counts
+        if not scenario_instance.simulation_results: return 0.0
+        mhd = scenario_instance.simulation_results.get('min_headway_distance', 100.0)
+        ttc = scenario_instance.simulation_results.get('min_ttc', 100.0)
+        unique_violations = scenario_instance.simulation_results.get('unique_violation_count', 0)
+        
+        # Heuristic for criticality: lower MHD/TTC, higher unique violations means more critical
+        criticality = 0.0
+        if mhd < 5.0: criticality += (5.0 - mhd) * 10
+        if ttc < 2.0: criticality += (2.0 - ttc) * 5
+        criticality += unique_violations * 20
+        return criticality
+
+    def calculate_scenario_diversity(self, scenario_instance: ScenarioInstance) -> float:
+        # Semantic and parameter space diversity (e.g., using scenario description embeddings, parameter ranges)
+        # This is a complex metric, simplified for pseudo-code.
+        # It would involve comparing scenario instances to a known set.
+        # Placeholder: assign random diversity or based on simple parameter range exploration
+        return random.uniform(0.0, 1.0) # Placeholder
+
+def apply_genetic_operators(population: List[ScenarioInstance], fixed_points: List[FormalizedFixedPoint], llm_analysis_output: Dict[str, Any]) -> List[ScenarioInstance]:
+    """
+    Applies fixed-point guided genetic operators (fuzzing and mutation) to a population.
+    This would involve crossover and mutation operations specific to scenario generation.
+    """
+    new_population = []
+    # For simplicity, let's just apply fuzzing/mutation to existing scenarios.
+    # In NSGA-II, this would be part of the offspring generation.
+    accident_pattern = AccidentPattern(
+        llm_analysis_output["inferred_accident_patterns"].get("driving_style_npcs", []),
+        llm_analysis_output["inferred_accident_patterns"].get("environmental_factors", []),
+        llm_analysis_output["inferred_accident_patterns"].get("sensor_issues", []),
+        llm_analysis_output["inferred_accident_patterns"].get("critical_interactions", []),
+        llm_analysis_output["inferred_accident_patterns"].get("severity_level", "medium")
+    )
+
+    for scen_instance in population:
+        # Apply fuzzing to create variations
+        fuzzed_scen = fuzz_scenario(scen_instance.prototype, random.choice(fixed_points))
+        new_population.append(fuzzed_scen)
+
+        # Apply structural mutation
+        mutated_proto = mutate_scenario_structure(scen_instance.prototype, random.choice(fixed_points), accident_pattern)
+        # A new instance from the mutated prototype would then be created, potentially fuzzed
+        new_population.append(ScenarioInstance(mutated_proto, mutated_proto.ego_vehicle_config)) # Simplified
+
+    return new_population
+
+def multi_objective_scenario_optimization(initial_population: List[ScenarioInstance],
+                                         fixed_points: List[FormalizedFixedPoint],
+                                         llm_analysis_output: Dict[str, Any],
+                                         max_generations: int = 100) -> List[ScenarioInstance]:
+    """
+    Algorithm 6: MULTIOBJECTIVESCENARIO_OPTIMIZATION
+    Performs multi-objective optimization using NSGA-II guided by fixed points.
+    """
+    problem = ScenarioOptimizationProblem(initial_population, fixed_points)
+    
+    # NSGA-II algorithm setup
+    algorithm = NSGA2(
+        pop_size=len(initial_population),
+        n_offsprings=len(initial_population),
+        sampling=initial_population, # Use initial scenarios as initial population
+        crossover=None, # Crossover and mutation are handled by ApplyGeneticOperators
+        mutation=None,
+        eliminate_duplicates=True
+    )
+
+    # The actual optimization loop (simplified, as `minimize` handles it internally)
+    # This loop conceptually represents Algorithm 6:
+    # 1. Evaluate population (done by _evaluate in Problem)
+    # 2. NSGA-II selection (done by NSGA2 algorithm)
+    # 3. Apply genetic operators (needs to be integrated or custom callback)
+
+    # For a full NSGA-II integration, `_evaluate` would call an actual simulator,
+    # and the genetic operators would be part of `algorithm.setup` or custom operators.
+    # The `apply_genetic_operators` function above demonstrates the logic.
+
+    # This is a conceptual representation of the loop.
+    # In a real pymoo setup, you would implement custom operators or
+    # hook into the algorithm's generation loop to apply fixed-point guidance.
+    
+    # For demonstration, we'll just run a simplified loop that might not use pymoo's internal
+    # population management correctly, but shows the conceptual flow.
+    population = initial_population
+    for gen in range(max_generations):
+        # 1. Simulate and evaluate (conceptually)
+        # In a real setup, 'problem._evaluate' would call the simulator
+        problem.current_population = population
+        problem._evaluate(None, {'F': []}) # This updates problem.current_population's objectives
+
+        # 2. NSGA-II Selection (conceptual)
+        # This is where NSGA2 algorithm sorts and selects
+        # For simplicity, let's assume `select_next_generation` applies NSGA-II logic
+        # (This is usually handled by the `minimize` function itself)
+        # selected_population = select_next_generation(population, problem.current_population_objectives)
+
+        # 3. Apply Genetic Operators (fuzzing/mutation guided by LLM)
+        new_offspring = apply_genetic_operators(population, fixed_points, llm_analysis_output)
+        population = new_offspring # Replace population with new offspring (simplified)
+
+    # Return the Pareto optimal set from the final population
+    return population # simplified, would be problem.pareto_front or similar in pymoo
+
+
