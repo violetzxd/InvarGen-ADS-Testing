@@ -58,24 +58,26 @@ INVARGEN orchestrates a closed-loop pipeline designed to systematically generate
 
 ## 📂 Repository Structure
 
+> **💡 Note for Peer Review:** To facilitate the double-blind review process while protecting intellectual property prior to publication, this repository currently contains a **core replication package**. It includes the essential algorithms, representative data samples, and a working demo. The complete codebase, full 200-case dataset, and exhaustive baseline scripts will be fully open-sourced upon the paper's acceptance.
+
 The project is structured to mirror the pipeline described in **Section 3** of the paper:
 
 ```text
 INVARGEN_Replication/
 ├── data/
-│   ├── accident_samples/       # (RQ1) Representative subset of UCF-Crime/CADP (Input)
-│   └── dsl_templates/          # Pre-defined scenario archetypes and DSL grammar
+│   ├── accident_samples/       # [Subset] A representative sample of UCF-Crime/CADP used for the demo
+│   └── dsl_templates/          # [Available] Pre-defined scenario archetypes and DSL grammar
 ├── src/
-│   ├── llm_agent/              # (Sec 3.2) Modules for Fixed Point Extraction (GPT-4o/Gemini)
-│   ├── generator/              # (Sec 3.3) Prototype Generation & Serialization
-│   ├── search_engine/          # (Sec 3.4) Hybrid Evolutionary Search (NSGA-II + Fuzzing)
-│   └── validator/              # (Sec 3.5) Kinematic checks & OpenSCENARIO compilation
-├── experiments/                # Scripts to reproduce RQ2-RQ5
-│   ├── rq2_search_effectiveness/
+│   ├── llm_agent/              # [Core] Core prompts and API integration for Fixed Point Extraction (Sec 3.2)
+│   ├── generator/              # [Core] Prototype Generation & Serialization logic (Sec 3.3)
+│   ├── search_engine/          # [Core] Hybrid Evolutionary Search algorithms (NSGA-II + Fuzzing) (Sec 3.4)
+│   └── validator/              # [Partial] Basic kinematic checks & OpenSCENARIO compilation (Sec 3.5)
+├── experiments/                # [Demo Scripts] Minimal scripts to demonstrate the evaluation workflow
+│   ├── rq2_search_effectiveness/ # (Full baseline comparison scripts pending final release)
 │   ├── rq3_defect_discovery/
 │   ├── rq4_validity/
-│   └── rq5_ablation/
-├── outputs/                    # Generated .xosc and .xodr files
+│   └── rq5_ablation/           # Core ablation logic for NoFP/NoFuzz/NoMut variants
+├── outputs/                    # Examples of generated .xosc and .xodr files
 ├── requirements.txt            # Python dependencies
-└── run_demo.py                 # One-click demo script
+└── run_demo.py                 # One-click end-to-end demo script
 
