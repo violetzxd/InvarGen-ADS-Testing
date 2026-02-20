@@ -77,11 +77,6 @@ INVARGEN_Replication/
 │   ├── search_engine/          # [Core] Hybrid Evolutionary Search algorithms (NSGA-II + Fuzzing) (Sec 3.4)
 │   └── validator/              # [Partial] Basic kinematic checks & OpenSCENARIO compilation (Sec 3.5)
 ├── experiments/                # [Demo Scripts] Minimal scripts to demonstrate the evaluation workflow
-│   ├── rq2_search_effectiveness/ # (Full baseline comparison scripts pending final release)
-│   ├── rq3_defect_discovery/
-│   ├── rq4_validity/
-│   └── rq5_ablation/           # Core ablation logic for NoFP/NoFuzz/NoMut variants
 ├── outputs/                    # Examples of generated .xosc and .xodr files
-├── requirements.txt            # Python dependencies
-└── run_demo.py                 # One-click end-to-end demo script
+└── requirements.txt            # Python dependencies
 
