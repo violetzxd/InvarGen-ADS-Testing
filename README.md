@@ -30,6 +30,31 @@ This repository implements the core innovations presented in our paper, specific
 ---
 
 
+## ⚙️ Methodology & Pipeline Workflow
+
+INVARGEN orchestrates a closed-loop pipeline designed to systematically generate and validate ADS test scenarios. The codebase is structured to reflect these four primary methodological stages:
+
+### 1. LLM-Driven Accident Analysis & Fixed Point Identification
+* **Input:** Ingests unstructured, multi-modal accident artifacts (dashcam videos, traffic footage, and textual reports).
+* **Process:** The LLM performs deep causal reasoning to identify critical traffic states. It extracts three distinct categories of invariants: **Safety Fixed Points** (stable conditions like lane keeping), **Critical Fixed Points** (unstable boundary states like near-collisions), and **Recovery Fixed Points** (liveness properties indicating stabilization after perturbations).
+* **Output:** Formalizes these invariants into an executable Domain-Specific Language (DSL) mapped to temporal logic predicates.
+
+### 2. Scenario Prototype Generation
+* **Process:** Transforms the formalized fixed points and accident cause chains into abstract, machine-readable blueprints (Scenario Prototypes). 
+* **Symbolic Parameterization:** Instead of generating rigid concrete scenarios, it defines critical parameters (e.g., NPC speeds, cut-in durations) as searchable ranges, converting the generation task into a bounded parameter search problem.
+* **Oracle Encapsulation:** The fixed points are explicitly embedded into these templates as targeted optimization objectives (Test Oracles).
+
+### 3. SE Method-Driven Hybrid Search
+* **Global Exploration (NSGA-II):** A multi-objective optimization loop prioritizing scenarios with high safety violation severity, high recovery difficulty, low Time-To-Collision (criticality), and high semantic diversity.
+* **Local Exploitation (Intelligent Fuzzing):** Systematically perturbs continuous parameters sensitive to the fixed-point boundaries (e.g., calculating deceleration gradients) to push the ADS over the safety edge.
+* **Structural Mutation:** The LLM acts as a semantic operator to inject high-level qualitative changes (e.g., altering vehicle types, injecting sensor noise, changing weather) when population diversity stalls.
+
+### 4. Formalization & Realism Assurance
+* **Kinematic Validation:** Acts as a gatekeeper to prevent "flying car" anomalies by enforcing strict physical bounds on longitudinal acceleration and lateral jerk.
+* **Pre-Simulation Verification:** Performs lightweight logical checks to ensure the semantic consistency of the generated scenario before consuming heavy simulation resources.
+* **Standardized Output:** Serializes the internal DSL into industry-standard **OpenSCENARIO 1.x** and **OpenDRIVE** formats, ensuring seamless execution in high-fidelity simulators like Carla and Panosim.
+
+
 
 ## 📂 Repository Structure
 
