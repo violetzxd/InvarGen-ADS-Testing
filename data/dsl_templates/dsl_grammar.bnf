@@ -1,39 +1,98 @@
-/* * INVARGEN Domain-Specific Language (DSL) Grammar
- * Based on Simplified Linear Temporal Logic (LTL)
- */
+/* ============================================================================
+ * INVARGEN Domain-Specific Language (DSL) Grammar
+ * Defines the complete formal blueprint for Scenario Prototypes, including:
+ * 1. Environment Topology
+ * 2. Symbolic Parameter Spaces (for Fuzzing)
+ * 3. Event Sequencing 
+ * 4. Fixed-Point Oracles (based on LTL)
+ * ============================================================================ */
 
-<FixedPoint>   ::= <Category> " : " <Monitor>
+/* --- 1. Root Structure --- */
+<ScenarioBlueprint> ::= "SCENARIO_PROTOTYPE" <Identifier> "{"
+                          <EnvironmentDef>
+                          <ParticipantDef>
+                          <EventSequence>
+                          <FixedPointOracles>
+                        "}"
 
-<Category>     ::= "SAFETY" | "CRITICAL" | "RECOVERY"
+/* --- 2. Data Types & Parameterization (Crucial for Fuzzing) --- */
+<Value>             ::= <Float> | <Integer> | <SymbolicVar> | <SearchRange>
+<SymbolicVar>       ::= "{" <Identifier> "}"   /* Instantiated by LLM based on context */
+<SearchRange>       ::= "RANGE(" <Float> ", " <Float> ")" /* Fuzzing boundaries */
+<Identifier>        ::= [a-zA-Z_][a-zA-Z0-9_]*
 
-<Monitor>      ::= <GlobalInvariant> | <EventDrivenAssertion>
+/* --- 3. Environment Context --- */
+<EnvironmentDef>    ::= "ENVIRONMENT {"
+                          "map: " <String>
+                          "weather: " <WeatherType>
+                          "friction_coeff: " <Value>
+                        "}"
+<WeatherType>       ::= "Clear" | "Rain" | "Fog" | "Snow" | "Wet_No_Rain"
 
-/* LTL Global Operator (G): Must hold true throughout the scenario */
-<GlobalInvariant> ::= "INVARIANT_ALWAYS(" <Predicate> ")"
+/* --- 4. Participants (Defining the initial state space) --- */
+<ParticipantDef>    ::= "PARTICIPANTS {" <EgoDef> <NPCDef>* "}"
+<EgoDef>            ::= "EGO_VEHICLE {" 
+                          "id: " <Identifier> 
+                          "init_speed: " <Value> 
+                          "init_lane: " <Integer> 
+                        "}"
+<NPCDef>            ::= "NPC_VEHICLE {" 
+                          "id: " <Identifier> 
+                          "type: " <VehicleClass>
+                          "init_speed: " <Value> 
+                          "init_lane: " <Integer> 
+                          "longitudinal_offset: " <Value> /* E.g., RANGE(10.0, 30.0) */
+                        "}"
+<VehicleClass>      ::= "Sedan" | "SUV" | "Truck" | "Motorcycle" | "Bus"
 
-/* LTL Trigger & Eventually Operator (F): If A happens, B must eventually hold within T */
-<EventDrivenAssertion> ::= "ON_EVENT(" <Trigger> ") { ASSERT_EVENTUALLY(" <Predicate> ", within_time=" <Value> ") }"
+/* --- 5. Event Sequence (Temporal Actions) --- */
+<EventSequence>     ::= "STORYBOARD {" <StoryEvent>+ "}"
+<StoryEvent>        ::= "EVENT " <Identifier> " {"
+                          "actor: " <Identifier>
+                          "trigger: " <TriggerCondition>
+                          "action: " <ActionDef>
+                        "}"
+<TriggerCondition>  ::= "TIME > " <Value> 
+                      | "DISTANCE(" <Identifier> ", " <Identifier> ") < " <Value>
+                      | "TTC(" <Identifier> ", " <Identifier> ") < " <Value>
 
-<Trigger>      ::= "lane_deviation_start(" <Actor> ")"
-                 | "emergency_braking_start(" <Actor> ")"
-                 | "cut_in_detected(" <Actor> ", " <Actor> ")"
-                 | "collision_avoidance_triggered(" <Actor> ")"
+<ActionDef>         ::= "CutIn(duration=" <Value> ", target_lane=" <Integer> ")"
+                      | "EmergencyBrake(target_speed=" <Value> ", deceleration=" <Value> ")"
+                      | "Accelerate(target_speed=" <Value> ", duration=" <Value> ")"
+                      | "MaintainKinematics()"
 
-<Predicate>    ::= <Condition> | <Condition> " AND " <Predicate>
+/* --- 6. Fixed Point Oracles (LTL-based Optimization Objectives) --- */
+<FixedPointOracles> ::= "FIXED_POINTS {" <FixedPoint>+ "}"
+<FixedPoint>        ::= <Category> ":" <Identifier> "{" <Monitor> "}"
+<Category>          ::= "SAFETY" | "CRITICAL" | "RECOVERY"
 
-<Condition>    ::= <Function> " " <Operator> " " <Value>
-                 | <BooleanFunc>
+<Monitor>           ::= <GlobalInvariant> | <EventDrivenAssertion>
 
-<Operator>     ::= ">" | "<" | ">=" | "<=" | "==" | "!="
+/* LTL Global Operator (G) */
+<GlobalInvariant>   ::= "INVARIANT_ALWAYS(" <Predicate> ")"
 
-<Function>     ::= "distance(" <Actor> ", " <Actor> ")"
-                 | "speed(" <Actor> ")"
-                 | "TTC(" <Actor> ", " <Actor> ")"
-                 | "abs(get_sideslip_angle(" <Actor> "))"
-                 | "lateral_deviation(" <Actor> ")"
+/* LTL Trigger & Eventually Operator (F) */
+<EventDrivenAssertion> ::= "ON_EVENT(" <SystemTrigger> ") { ASSERT_EVENTUALLY(" <Predicate> ", within_time=" <Value> ") }"
 
-<BooleanFunc>  ::= "is_lane_centered(" <Actor> ", tolerance=" <Value> ")"
-                 | "is_stopped(" <Actor> ")"
+<SystemTrigger>     ::= "lane_deviation_start(" <Identifier> ")"
+                      | "emergency_braking_start(" <Identifier> ")"
+                      | "collision_avoidance_triggered(" <Identifier> ")"
 
-<Actor>        ::= "Ego" | "NPC_" <String> | "Pedestrian_" <String>
-<Value>        ::= <Float> | <SymbolicVariable>
+<Predicate>         ::= <Condition> | <Condition> " AND " <Predicate>
+<Condition>         ::= <Function> " " <Operator> " " <Value>
+                      | <BooleanFunc>
+
+<Operator>          ::= ">" | "<" | ">=" | "<=" | "==" | "!="
+
+<Function>          ::= "distance(" <Identifier> ", " <Identifier> ")"
+                      | "speed(" <Identifier> ")"
+                      | "TTC(" <Identifier> ", " <Identifier> ")"
+                      | "abs(get_sideslip_angle(" <Identifier> "))"
+                      | "lateral_deviation(" <Identifier> ")"
+
+<BooleanFunc>       ::= "is_lane_centered(" <Identifier> ", tolerance=" <Value> ")"
+                      | "is_stopped(" <Identifier> ")"
+
+<String>            ::= '"' [^"]* '"'
+<Float>             ::= [0-9]+ "." [0-9]+
+<Integer>           ::= "-"? [0-9]+
