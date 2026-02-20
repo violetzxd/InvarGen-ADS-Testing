@@ -20,7 +20,9 @@ The engine optimizes a 4-dimensional objective vector $J(S)$ for each scenario $
 
 ## 🚀 Algorithm Details
 
-
+<p align="center">
+  <img src="assets/Algorithm.png" width="700">
+</p>
 
 ## 📂 Module Structure
 * `fitness.py`: Implements the objective function calculations based on simulation traces.
