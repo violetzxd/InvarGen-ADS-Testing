@@ -1,0 +1,39 @@
+/* * INVARGEN Domain-Specific Language (DSL) Grammar
+ * Based on Simplified Linear Temporal Logic (LTL)
+ */
+
+<FixedPoint>   ::= <Category> " : " <Monitor>
+
+<Category>     ::= "SAFETY" | "CRITICAL" | "RECOVERY"
+
+<Monitor>      ::= <GlobalInvariant> | <EventDrivenAssertion>
+
+/* LTL Global Operator (G): Must hold true throughout the scenario */
+<GlobalInvariant> ::= "INVARIANT_ALWAYS(" <Predicate> ")"
+
+/* LTL Trigger & Eventually Operator (F): If A happens, B must eventually hold within T */
+<EventDrivenAssertion> ::= "ON_EVENT(" <Trigger> ") { ASSERT_EVENTUALLY(" <Predicate> ", within_time=" <Value> ") }"
+
+<Trigger>      ::= "lane_deviation_start(" <Actor> ")"
+                 | "emergency_braking_start(" <Actor> ")"
+                 | "cut_in_detected(" <Actor> ", " <Actor> ")"
+                 | "collision_avoidance_triggered(" <Actor> ")"
+
+<Predicate>    ::= <Condition> | <Condition> " AND " <Predicate>
+
+<Condition>    ::= <Function> " " <Operator> " " <Value>
+                 | <BooleanFunc>
+
+<Operator>     ::= ">" | "<" | ">=" | "<=" | "==" | "!="
+
+<Function>     ::= "distance(" <Actor> ", " <Actor> ")"
+                 | "speed(" <Actor> ")"
+                 | "TTC(" <Actor> ", " <Actor> ")"
+                 | "abs(get_sideslip_angle(" <Actor> "))"
+                 | "lateral_deviation(" <Actor> ")"
+
+<BooleanFunc>  ::= "is_lane_centered(" <Actor> ", tolerance=" <Value> ")"
+                 | "is_stopped(" <Actor> ")"
+
+<Actor>        ::= "Ego" | "NPC_" <String> | "Pedestrian_" <String>
+<Value>        ::= <Float> | <SymbolicVariable>
