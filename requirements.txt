@@ -1,0 +1,39 @@
+# ============================================================================
+# INVARGEN Replication Package Dependencies
+# Python Version Support: 3.10, 3.11, 3.12
+# ============================================================================
+
+# --- 1. LLM & API Integrations (Section 3.2: Semantic Extraction) ---
+# Required for connecting to GPT-4o / LLM backends to instantiate Fixed Points
+openai>=1.12.0
+tiktoken>=0.6.0       # For accurate prompt token counting and cost estimation
+
+# --- 2. Core Scientific & Optimization Algorithms (Section 3.4: Hybrid Search) ---
+# Required for NSGA-II fitness evaluation, matrix operations, and gradient-like fuzzing
+numpy>=1.23.0         # Core numerical operations
+scipy>=1.9.0          # Advanced mathematical functions and statistical tests (for RQ evaluations)
+pandas>=1.5.0         # Data manipulation for accident dataset processing and result aggregation
+
+# --- 3. Configuration & Serialization (Section 3.3 & 3.5) ---
+# Required for parsing Scenario Archetypes and compiling OpenSCENARIO DSL
+PyYAML>=6.0.1         # Parsing dsl_templates/*.yaml definitions
+# Note: xml.etree and xml.dom are used for OpenSCENARIO (.xosc) generation, which are built-in.
+
+# --- 4. Evaluation & Semantic Diversity Metrics (RQ2, RQ3, RQ4) ---
+# Required for calculating the Semantic Diversity Score (Eq. 4) using text/scenario embeddings
+scikit-learn>=1.2.0   # For clustering (e.g., K-Means) and pairwise distance calculations
+sentence-transformers>=2.2.2  # For extracting semantic embeddings from accident cause chains
+
+# --- 5. Utilities & Visualization ---
+tqdm>=4.65.0          # Progress bars for the multi-generational NSGA-II evolutionary loops
+matplotlib>=3.7.0     # Generating Pareto Front scatter plots and fitness convergence graphs
+seaborn>=0.12.0       # Statistical data visualization for the ablation study results
+
+# ============================================================================
+# --- 6. Simulation Environments (Optional / Production Backend) ---
+# NOTE FOR PEER REVIEW: 
+# The lightweight kinematic simulator is built-in and requires no external libraries.
+# If you wish to run the full 3D physics validation, please refer to the CARLA docs.
+# 
+# carla>=0.9.13       # (Provided via CARLA egg file, do not install via pip)
+# ============================================================================
