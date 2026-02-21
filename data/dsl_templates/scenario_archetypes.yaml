@@ -1,0 +1,138 @@
+# ==============================================================================
+# INVARGEN Scenario Topological Archetypes Library
+# Description: Defines the base topological structures for Stage 1 of Prototype Generation.
+# Engineering Note: 
+# - {symbolic_var}: Indicates a variable to be dynamically inferred by the LLM.
+# - RANGE(min, max): Defines the continuous search space bounds for the Intelligent Fuzzer.
+# - Allowed Mutations: Defines the discrete search space for the LLM Structural Mutator.
+# ==============================================================================
+
+ARCHETYPES:
+
+  # ----------------------------------------------------------------------------
+  # Archetype 1: Aggressive Cut-In on High-Speed Road
+  # Target Vulnerability: Longitudinal control delays, prediction errors, braking capabilities.
+  # ----------------------------------------------------------------------------
+  Highway_CutIn:
+    description: "An NPC vehicle aggressively merges into the Ego vehicle's lane with minimal clearance."
+    environment:
+      map_reference: "Town04.xodr"  # Multi-lane high-speed ring
+      weather: "{inferred_weather}" # Dynamically set by LLM (e.g., Rain, Clear)
+      time_of_day: "{inferred_time}" # E.g., Noon, Sunset (affects perception)
+      road_friction: "RANGE(0.4, 0.9)" # Fuzzer explores friction bounds based on weather
+    
+    participants:
+      - role: "Ego"
+        id: "Ego_1"
+        vehicle_type: "vehicle.tesla.model3"
+        init_state:
+          lane: 0
+          s_offset: 0.0
+          speed: "RANGE(20.0, 35.0)" # Fuzzer explores Ego initial speed limits
+      
+      - role: "NPC_Threat"
+        id: "NPC_CutIn"
+        vehicle_type: "{inferred_npc_type}" # LLM infers Car/Truck based on accident report
+        init_state:
+          lane: -1 # Adjacent lane
+          s_offset: "RANGE(5.0, 30.0)" # Fuzzer searches for the most dangerous initial gap
+          speed: "RANGE(25.0, 40.0)"
+          
+    event_sequence:
+      - event_id: "Trigger_CutIn"
+        actor: "NPC_CutIn"
+        trigger_condition: "TTC(Ego_1, NPC_CutIn) < RANGE(1.5, 4.0)" # Fuzzing the trigger timing
+        action: "CutIn(duration=RANGE(1.0, 3.5), target_lane=0)"
+
+    allowed_structural_mutations:
+      - "ChangeWeather(options=[Clear, HeavyRain, Fog])"
+      - "ChangeNPCVehicleType(options=[Sedan, HeavyTruck, Motorcycle])"
+      - "AddBackgroundTraffic(density=RANGE(0.2, 0.8))"
+
+
+  # ----------------------------------------------------------------------------
+  # Archetype 2: Urban Intersection Signal Violation
+  # Target Vulnerability: Cross-traffic perception, occlusion, complex traffic rule arbitration.
+  # ----------------------------------------------------------------------------
+  Urban_Intersection_Violation:
+    description: "Ego enters an intersection with a green light, but an NPC violates the red light from a perpendicular direction."
+    environment:
+      map_reference: "Town05.xodr"  # Signalized 4-way intersection
+      weather: "{inferred_weather}"
+      time_of_day: "{inferred_time}"
+      road_friction: "RANGE(0.5, 1.0)"
+      
+    participants:
+      - role: "Ego"
+        id: "Ego_1"
+        vehicle_type: "vehicle.lincoln.mkz_2017"
+        init_state:
+          junction_entry: "South"
+          intention: "Straight"
+          distance_to_stopline: "RANGE(30.0, 50.0)"
+          speed: "RANGE(10.0, 20.0)"
+          
+      - role: "NPC_Threat"
+        id: "NPC_Violator"
+        vehicle_type: "{inferred_npc_type}"
+        init_state:
+          junction_entry: "East" # Crossing path
+          intention: "Straight"
+          distance_to_stopline: "RANGE(15.0, 40.0)"
+          speed: "RANGE(15.0, 25.0)"
+          
+    event_sequence:
+      - event_id: "Traffic_Light_State"
+        actor: "Environment"
+        trigger_condition: "TIME > 0.0"
+        action: "SetTrafficLight(South=Green, East=Red)"
+        
+      - event_id: "Red_Light_Running"
+        actor: "NPC_Violator"
+        trigger_condition: "DISTANCE(NPC_Violator, IntersectionCenter) < RANGE(10.0, 20.0)"
+        action: "Accelerate(target_speed=RANGE(18.0, 30.0), duration=2.0)" # Fuzzer finds worst-case acceleration
+
+    allowed_structural_mutations:
+      - "ChangeWeather(options=[Clear, Fog])"
+      - "AddOcclusion(actor=Bus, location=IntersectionCorner)" # Crucial for perception testing
+      - "AddPedestrianCrossing(jaywalking=True)"
+
+
+  # ----------------------------------------------------------------------------
+  # Archetype 3: Rural Road Obstacle Avoidance (Vulnerable Road Users)
+  # Target Vulnerability: Sudden swerving, lane recovery stability, VRU detection.
+  # ----------------------------------------------------------------------------
+  Rural_Obstacle_Avoidance:
+    description: "Ego vehicle encounters a sudden static or slow-moving obstacle (e.g., Pedestrian or broken car) on a narrow road, requiring an evasive swerve."
+    environment:
+      map_reference: "Town01.xodr" # Two-lane undivided road
+      weather: "{inferred_weather}"
+      time_of_day: "Night" # Forces edge-case perception
+      road_friction: "RANGE(0.3, 0.8)" # Tests ESC and recovery fixed points
+      
+    participants:
+      - role: "Ego"
+        id: "Ego_1"
+        vehicle_type: "vehicle.audi.tt"
+        init_state:
+          lane: 1
+          s_offset: 0.0
+          speed: "RANGE(15.0, 25.0)"
+          
+      - role: "Obstacle"
+        id: "Pedestrian_1"
+        vehicle_type: "walker.pedestrian.0001"
+        init_state:
+          lane: 1
+          s_offset: "RANGE(40.0, 80.0)" # Fuzzer explores sight distance limits
+          speed: "RANGE(0.0, 2.0)" # Static or slow walking
+          
+    event_sequence:
+      - event_id: "Sudden_Intrusion"
+        actor: "Pedestrian_1"
+        trigger_condition: "TTC(Ego_1, Pedestrian_1) < RANGE(2.0, 5.0)"
+        action: "CrossRoad(speed=RANGE(1.5, 3.5), direction=Perpendicular)"
+
+    allowed_structural_mutations:
+      - "ChangeObstacleType(options=[Pedestrian, Cyclist, StaticDebris])"
+      - "AddOncomingTraffic(lane=-1, speed=RANGE(15.0, 25.0))" # Constrains Ego's ability to swerve left
