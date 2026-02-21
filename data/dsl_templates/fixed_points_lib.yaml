@@ -1,0 +1,109 @@
+# ==============================================================================
+# INVARGEN Fixed Point Semantic Library
+# Description: Defines the architectural skeleton of Scenario Fixed Points.
+# Crucial Note for Fuzzing: Variables enclosed in curly braces {} are NOT static. 
+# They are "Symbolic Variables" dynamically instantiated by the LLM based on 
+# multi-modal accident context (e.g., weather, road surface, vehicle kinematics).
+# ==============================================================================
+
+SAFETY_FIXED_POINTS:
+  # Objective: Maintain stable, collision-free, and legally compliant nominal states.
+  # Optimization Target in MOEA: Maximize the time-integral of violation magnitude (Eq. 1).
+
+  LaneKeeping:
+    description: "The Ego vehicle must stay within its designated lane boundaries, dynamically adjusting for road curvature and surface conditions."
+    dsl_template: "INVARIANT_ALWAYS(is_lane_centered(Ego, tolerance={dynamic_tolerance}))"
+    dynamic_parameters:
+      dynamic_tolerance: 
+        type: "Float"
+        inference_rule: "Base 0.3m. Relaxed by LLM (e.g., up to 0.8m) if the accident video shows snow-covered lane markings or evasive maneuvering space."
+    
+  SafeHeadway:
+    description: "The Ego vehicle must maintain a context-aware longitudinal gap to the leading actor."
+    dsl_template: "INVARIANT_ALWAYS(distance(Ego, {target_actor}) > {min_safe_distance})"
+    dynamic_parameters:
+      target_actor: 
+        type: "Identifier"
+        inference_rule: "Extracted from the causal chain (e.g., 'NPC_Front_Truck')."
+      min_safe_distance: 
+        type: "Float"
+        inference_rule: "Calculated via Kinematic inference. Base 2.0s headway distance. Scaled up if the context involves wet asphalt, heavy payload, or low visibility."
+
+  TrafficRuleCompliance:
+    description: "The Ego vehicle must obey dynamic speed limits and regulatory stopping distances."
+    dsl_template: "INVARIANT_ALWAYS(speed(Ego) <= {contextual_speed_limit} AND distance_to_stopline(Ego) >= {safe_stop_margin})"
+    dynamic_parameters:
+      contextual_speed_limit: 
+        type: "Float"
+        inference_rule: "Legal limit extracted from scene signage, penalized/lowered by LLM if adverse weather (e.g., heavy fog) dictates a lower safe operating speed."
+      safe_stop_margin:
+        type: "Float"
+        inference_rule: "Minimum distance to intersection stop lines when a red light event is triggered."
+
+
+CRITICAL_FIXED_POINTS:
+  # Objective: Define the extreme boundary states immediately preceding a system failure.
+  # Optimization Target in MOEA: Maximize criticality (e.g., Minimize TTC to 0) (Eq. 3).
+
+  NearLossOfControl:
+    description: "Vehicle kinematics approach the limits of physical tire friction, risking spin-outs."
+    dsl_template: "INVARIANT_ALWAYS(abs(get_sideslip_angle(Ego)) < {critical_slip_angle} AND lateral_acceleration(Ego) < {max_lat_accel})"
+    dynamic_parameters:
+      critical_slip_angle: 
+        type: "Float"
+        inference_rule: "Inferred from road friction coefficient. e.g., 5.0 degrees on dry tarmac, but 2.0 degrees on icy roads."
+      max_lat_accel:
+        type: "Float"
+        inference_rule: "Typically ~0.4G to 0.6G before electronic stability control (ESC) fails."
+
+  SensorAnomaly:
+    description: "Perception system confidence drops below safe operational thresholds due to occlusion, glare, or weather."
+    dsl_template: "INVARIANT_ALWAYS(perception_confidence(Ego, {threat_actor}) > {min_confidence_threshold})"
+    dynamic_parameters:
+      threat_actor:
+        type: "Identifier"
+        inference_rule: "The specific NPC or Pedestrian entering the blind spot or obscured by environmental noise."
+      min_confidence_threshold:
+        type: "Float"
+        inference_rule: "Inferred from lighting conditions (e.g., lower baseline confidence accepted at night or during heavy rain)."
+
+  NearCollisionInteraction:
+    description: "Spatial-temporal conflict metric drops below the minimum human/machine reaction boundary."
+    dsl_template: "INVARIANT_ALWAYS(TTC(Ego, {threat_actor}) > {critical_ttc})"
+    dynamic_parameters:
+      threat_actor: 
+        type: "Identifier"
+        inference_rule: "The interacting agent (e.g., a crossing pedestrian or a cut-in vehicle)."
+      critical_ttc: 
+        type: "Float"
+        inference_rule: "Time-To-Collision threshold. Usually 1.5s, but dynamically shortened to 0.8s in dense urban intersection contexts."
+
+
+RECOVERY_FIXED_POINTS:
+  # Objective: Test the 'Liveness' and resilience of the ADS. After a perturbation, it must stabilize.
+  # Optimization Target in MOEA: Maximize the time required to regain stability (Eq. 2).
+
+  LaneRecovery:
+    description: "After an evasive swerve or environmental disturbance (e.g., crosswind), the Ego must restabilize in the lane center."
+    dsl_template: "ON_EVENT(lane_deviation_start(Ego)) { ASSERT_EVENTUALLY(is_lane_centered(Ego, tolerance={stable_tolerance}), within_time={recovery_time}) }"
+    dynamic_parameters:
+      stable_tolerance:
+        type: "Float"
+        inference_rule: "The strict tolerance required to be considered 'recovered' (e.g., 0.2m)."
+      recovery_time:
+        type: "Float"
+        inference_rule: "Maximum allowable time window to damp oscillation. Derived by LLM from Ego vehicle dynamics (e.g., 4.0s for a sedan, 7.0s for an articulated bus)."
+
+  SafeDistanceRecovery:
+    description: "Following a sudden cut-in or emergency braking, the Ego must eventually restore a safe following gap."
+    dsl_template: "ON_EVENT(cut_in_detected(Ego, {threat_actor})) { ASSERT_EVENTUALLY(distance(Ego, {threat_actor}) > {restored_safe_distance}, within_time={recovery_time}) }"
+    dynamic_parameters:
+      threat_actor:
+        type: "Identifier"
+        inference_rule: "The vehicle that executed the aggressive cut-in."
+      restored_safe_distance:
+        type: "Float"
+        inference_rule: "The new safe distance to maintain (can be larger than initial if the road became wet during the event)."
+      recovery_time:
+        type: "Float"
+        inference_rule: "Time allowed to safely decelerate and build the gap without causing a rear-end collision from behind."
