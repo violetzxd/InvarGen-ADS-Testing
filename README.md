@@ -29,7 +29,7 @@ This repository implements the core innovations presented in our paper, specific
 * **Novel Framework Paradigm:** We propose INVARGEN, the first framework to utilize multi-modal LLMs as *active parametric specification generators* rather than passive scene translators. It seamlessly bridges semantic accident analysis with systematic software testing.
 * **Dynamic Semantic Abstraction:** We introduce the concept of **Scenario Fixed Points**—context-aware safety invariants (e.g., adaptive safe headway thresholds) that are dynamically instantiated from unstructured accident videos. These adapt flexibly to environmental contexts (like weather or road friction) to provide precise guidance for robustness testing.
 * **Hybrid Evolutionary Mechanism:** We implemented a Fixed-Point Guided Hybrid Search algorithm. It synergizes two distinct operators: *Intelligent Fuzzing* for the local exploitation of boundary parameters, and *LLM-Driven Structural Mutation* for the global exploration of diverse environmental contexts.
-* **Rigorous Empirical Validation:** Through extensive evaluation involving 30 independent runs over 1,400 synthesized scenarios, INVARGEN statistically outperforms state-of-the-art baselines. It achieves a 30% fixed-point violation rate, discovers 37.5% more unique violation types, and maintains 100% compatibility with OpenX standards.
+* **Rigorous Empirical Validation:** Through extensive evaluation involving 30 independent runs over 1,400 synthesized scenarios, INVARGEN statistically outperforms state-of-the-art baselines. It achieves a 30% fixed-point violation rate, discovers 37.8% more unique violation types, and maintains 100% compatibility with OpenX standards.
 
 ---
 
