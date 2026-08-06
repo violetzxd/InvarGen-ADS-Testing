@@ -2,7 +2,7 @@
 
 [![Anonymous Submission](https://img.shields.io/badge/ISSTA-2026-blue)](https://conf.researchr.org/home/issta-2026)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green)]([LICENSE](https://mit-license.org/))
 
 > **Note to Reviewers:** This repository contains the **replication package** for the paper *"Fixed-Point Guided ADS Scenario Generation via Multi-Modal LLM Reasoning and Software Testing"*. To maintain anonymity, all author information and institutional links have been redacted.
 
